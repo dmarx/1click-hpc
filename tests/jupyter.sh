@@ -24,6 +24,9 @@ jobId = os.popen('sbatch jupyter.sbatch').read()
 print(jobId)
 jobId = [int(s) for s in jobId.split() if s.isdigit()][0]
 
+# TO DO: script should infer headnode ip. presumably this is the IP that ran the script
+HEADNODE_IP='44.195.55.5'
+
 # wait for the output file to appear
 while not os.path.exists(f'jupyter_{jobId}.out'):
     time.sleep(1)
@@ -58,7 +61,7 @@ token = token.split('=')[-1]
 username = os.getlogin()
 
 print ("connect with:")
-print (f"ssh -L8888:{jIP}:8888 {username}@52.71.232.47")
+print (f"ssh -L8888:{jIP}:8888 {username}@{HEADNODE_IP}")
 print()
 print("then browse:")
 print (f"http://127.0.0.1:8888/?token={token}")
