@@ -60,4 +60,52 @@ do
   aws ec2 create-tags --region $cfn_region --resources ${host} --tags Key=aws-parallelcluster-username,Value=${SLURM_JOB_USER} Key=aws-parallelcluster-jobid,Value=${SLURM_JOBID} Key=aws-parallelcluster-partition,Value=${SLURM_JOB_PARTITION} ${tags}
 done
 
+# fix cuda in containers
+/sbin/modprobe nvidia
+
+if [ "$?" -eq 0 ]; then
+  # Count the number of NVIDIA controllers found.
+  NVDEVS=`lspci | grep -i NVIDIA`
+  N3D=`echo "$NVDEVS" | grep "3D controller" | wc -l`
+  NVGA=`echo "$NVDEVS" | grep "VGA compatible controller" | wc -l`
+
+  N=`expr $N3D + $NVGA - 1`
+  for i in `seq 0 $N`; do
+    mknod -m 666 /dev/nvidia$i c 195 $i
+  done
+
+  mknod -m 666 /dev/nvidiactl c 195 255
+
+else
+  exit 1
+fi
+
+/sbin/modprobe nvidia-uvm
+
+if [ "$?" -eq 0 ]; then
+  # Find out the major device number used by the nvidia-uvm driver
+  D=`grep nvidia-uvm /proc/devices | awk '{print $1}'`
+
+  mknod -m 666 /dev/nvidia-uvm c $D 0
+else
+  exit 1
+fi
+
+#make enroot folders to accomodate multiple users on same compute host
+
+runtime_path="$(sudo -u "$SLURM_JOB_USER" sh -c 'echo "/run/enroot/user-$(id -u)"')"
+mkdir -p "$runtime_path"
+chown "$SLURM_JOB_UID:$(id -g "$SLURM_JOB_UID")" "$runtime_path"
+chmod 0700 "$runtime_path"
+
+cache_path="$(sudo -u "$SLURM_JOB_USER" sh -c 'echo "/tmp/group-$(id -g)"')"
+mkdir -p "$cache_path"
+chown "$SLURM_JOB_UID:$(id -g "$SLURM_JOB_UID")" "$cache_path"
+chmod 0770 "$cache_path"
+
+data_path="$(sudo -u "$SLURM_JOB_USER" sh -c 'echo "/tmp/enroot-data/user-$(id -u)"')"
+mkdir -p "$data_path"
+chown "$SLURM_JOB_UID:$(id -g "$SLURM_JOB_UID")" "$data_path"
+chmod 0700 "$data_path"
+
 exit 0
